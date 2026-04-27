@@ -1,0 +1,235 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  handle    String   @unique
+  fullName  String
+  avatar    String?
+  role      UserRole @default(BUYER)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  managedSuppliers Supplier[]
+  sessions         Session[]
+  chatMessages     ChatMessage[]
+  pollVotes        PollVote[]
+  guestRequests    GuestRequest[]
+}
+
+enum UserRole {
+  ADMIN
+  SUPPLIER
+  CREATOR
+  BUYER
+}
+
+model Supplier {
+  id        String   @id @default(uuid())
+  name      String
+  note      String?
+  ownerId   String
+  owner     User     @relation(fields: [ownerId], references: [id])
+  campaigns Campaign[]
+  createdAt DateTime @default(now())
+}
+
+model Campaign {
+  id          String   @id @default(uuid())
+  name        String
+  note        String?
+  supplierId  String
+  supplier    Supplier @relation(fields: [supplierId], references: [id])
+  sessions    Session[]
+  products    Product[]
+  createdAt   DateTime @default(now())
+}
+
+model Session {
+  id            String   @id @default(uuid())
+  name          String
+  note          String?
+  campaignId    String
+  campaign      Campaign @relation(fields: [campaignId], references: [id])
+  hostId        String
+  host          User     @relation(fields: [hostId], references: [id])
+  status        SessionStatus @default(STANDBY)
+  scheduledStart DateTime?
+  actualStart    DateTime?
+  actualEnd      DateTime?
+  totalMinutes   Int      @default(0)
+  cueBlocks      Int      @default(0)
+  connection     String   @default("Good")
+  coupon         String?
+  
+  chatRoom      ChatRoom?
+  analytics     AnalyticsEvent[]
+  flashSales    FlashSale[]
+  polls         Poll[]
+  guestRequests GuestRequest[]
+  
+  // New: Teleprompter & Planning
+  teleprompter  String?
+  focusProductId String?
+  plan          SessionPlan?
+
+  createdAt     DateTime @default(now())
+}
+
+enum SessionStatus {
+  STANDBY
+  READY
+  LIVE
+  REHEARSAL
+  ENDED
+}
+
+model Product {
+  id          String   @id @default(uuid())
+  name        String
+  description String?
+  price       Float
+  currency    String   @default("UGX")
+  image       String
+  sellMode    SellMode @default(RETAIL)
+  campaignId  String
+  campaign    Campaign @relation(fields: [campaignId], references: [id])
+  flashSales  FlashSale[]
+  
+  // New: Goals
+  goalMetric  String?  @default("sold")
+  goalTarget  Float?   @default(0)
+  kind        String?  @default("product")
+
+  createdAt   DateTime @default(now())
+}
+
+enum SellMode {
+  RETAIL
+  WHOLESALE
+}
+
+model FlashSale {
+  id          String   @id @default(uuid())
+  sessionId   String
+  session     Session  @relation(fields: [sessionId], references: [id])
+  productId   String
+  product     Product  @relation(fields: [productId], references: [id])
+  discountPct Int
+  status      FlashSaleStatus @default(PENDING)
+  startTime   DateTime?
+  endTime     DateTime?
+  createdAt   DateTime @default(now())
+}
+
+enum FlashSaleStatus {
+  PENDING
+  ACTIVE
+  ENDED
+}
+
+model Poll {
+  id        String   @id @default(uuid())
+  question  String
+  sessionId String
+  session   Session  @relation(fields: [sessionId], references: [id])
+  options   PollOption[]
+  status    PollStatus @default(DRAFT)
+  createdAt DateTime @default(now())
+}
+
+enum PollStatus {
+  DRAFT
+  ACTIVE
+  CLOSED
+}
+
+model PollOption {
+  id     String   @id @default(uuid())
+  pollId String
+  poll   Poll     @relation(fields: [pollId], references: [id])
+  label  String
+  votes  PollVote[]
+}
+
+model PollVote {
+  id        String     @id @default(uuid())
+  optionId  String
+  option    PollOption @relation(fields: [optionId], references: [id])
+  userId    String
+  user      User       @relation(fields: [userId], references: [id])
+  createdAt DateTime   @default(now())
+}
+
+model ChatRoom {
+  id        String   @id @default(uuid())
+  sessionId String   @unique
+  session   Session  @relation(fields: [sessionId], references: [id])
+  messages  ChatMessage[]
+}
+
+model ChatMessage {
+  id        String   @id @default(uuid())
+  roomId    String
+  room      ChatRoom @relation(fields: [roomId], references: [id])
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  content   String
+  isPinned  Boolean  @default(false)
+  createdAt DateTime @default(now())
+}
+
+model GuestRequest {
+  id        String   @id @default(uuid())
+  sessionId String
+  session   Session  @relation(fields: [sessionId], references: [id])
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  status    GuestStatus @default(PENDING)
+  note      String?
+  createdAt DateTime @default(now())
+}
+
+enum GuestStatus {
+  PENDING
+  BACKSTAGE
+  WAITING
+  ONSTAGE
+  DECLINED
+}
+
+model AnalyticsEvent {
+  id        String   @id @default(uuid())
+  sessionId String
+  session   Session  @relation(fields: [sessionId], references: [id])
+  name      String
+  payload   Json?
+  createdAt DateTime @default(now())
+}
+model SessionPlan {
+  id            String   @id @default(uuid())
+  sessionId     String   @unique
+  session       Session  @relation(fields: [sessionId], references: [id])
+  liveWideNote  String?
+  segments      SessionSegment[]
+  createdAt     DateTime @default(now())
+}
+
+model SessionSegment {
+  id              String   @id @default(uuid())
+  planId          String
+  plan            SessionPlan @relation(fields: [planId], references: [id])
+  title           String
+  type            String?  @default("scene")
+  durationMin     Int      @default(1)
+  teleprompterNote String?
+  order           Int      @default(0)
+  createdAt       DateTime @default(now())
+}
