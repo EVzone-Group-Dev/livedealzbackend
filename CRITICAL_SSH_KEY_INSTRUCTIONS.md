@@ -127,6 +127,72 @@ git push origin main
 
 Monitor in GitHub → Actions tab.
 
+## Troubleshooting Common Errors
+
+### Error: "ssh: handshake failed: ssh: unable to authenticate, attempted methods [none publickey]"
+
+This error means the SSH connection is working, but authentication is failing. Common causes:
+
+#### 1. Public Key Not in `authorized_keys`
+
+**Check**: The public key corresponding to your private key must be in `~/.ssh/authorized_keys` on the Droplet.
+
+**Fix**:
+```bash
+# On your local machine, get the public key
+cat deploy_key.pub
+
+# SSH to Droplet and check if it's in authorized_keys
+ssh root@your-droplet-ip
+cat ~/.ssh/authorized_keys
+
+# If not there, add it
+cat deploy_key.pub >> ~/.ssh/authorized_keys
+```
+
+#### 2. Wrong Permissions
+
+**Fix**: Set correct permissions on the Droplet:
+```bash
+chmod 700 ~/.ssh
+chmod 600 ~/.ssh/authorized_keys
+```
+
+#### 3. Wrong User
+
+**Check**: Make sure `DO_USERNAME` matches the user that owns the `authorized_keys` file.
+
+- If the key is in `root`'s `authorized_keys`, use `root` as `DO_USERNAME`
+- If the key is in `ubuntu`'s `authorized_keys`, use `ubuntu` as `DO_USERNAME`
+
+#### 4. Wrong Private Key
+
+**Check**: Make sure the private key in `DO_SSH_KEY` matches the public key in `authorized_keys`.
+
+```bash
+# Generate public key from private key (on your local machine)
+ssh-keygen -y -f deploy_key
+
+# Compare with what's in authorized_keys on Droplet
+```
+
+They should match (the public key from this command should be in `authorized_keys`).
+
+### Error: "Permission denied (publickey)"
+
+Similar causes as above. Check:
+1. Public key is in `authorized_keys`
+2. Permissions are correct (700 for `.ssh`, 600 for `authorized_keys`)
+3. Correct username is being used
+4. SSH service is running on Droplet
+
+### Error: "ssh: no key found"
+
+The private key format is wrong. Make sure it:
+- Starts with `-----BEGIN OPENSSH PRIVATE KEY-----` or `-----BEGIN RSA PRIVATE KEY-----`
+- Includes the END line
+- Has no extra spaces or line breaks
+
 ## Summary
 
 | Location | Key Type | Format | Example |
@@ -139,8 +205,53 @@ Monitor in GitHub → Actions tab.
 
 ---
 
+## 📋 Understanding DO_USERNAME
+
+**What is `DO_USERNAME`?**
+
+`DO_USERNAME` is the SSH username for your Droplet - the user you use to log in via SSH.
+
+**Common values:**
+- `root` - The administrator user (most common on DigitalOcean)
+- `ubuntu` - Default user on Ubuntu-based Droplets
+- `admin` - Sometimes used on other distributions
+
+**How to find your username:**
+
+When you SSH into your Droplet, what command do you use?
+
+```bash
+# If you use this command:
+ssh root@123.45.67.89
+# Then your DO_USERNAME is: root
+
+# If you use this command:
+ssh ubuntu@123.45.67.89
+# Then your DO_USERNAME is: ubuntu
+```
+
+**Why is this important?**
+
+The `DO_USERNAME` must match the user that owns the `authorized_keys` file where your public key is stored.
+
+- If your public key is in `/root/.ssh/authorized_keys` → Use `root`
+- If your public key is in `/home/ubuntu/.ssh/authorized_keys` → Use `ubuntu`
+
+**Example Configuration:**
+
+```
+DO_HOST: 123.45.67.89          # Your Droplet's IP
+DO_USERNAME: root               # SSH username (root or ubuntu)
+DO_SSH_KEY: -----BEGIN PRIVATE KEY-----  # Your PRIVATE key
+              b3BlbnNzaC1rZXktdjEAAAA...
+              -----END PRIVATE KEY-----
+```
+
+---
+
 **Still stuck?** 
 1. Check that your private key has the correct format
 2. Ensure no extra spaces or line breaks were added
 3. Verify the key wasn't truncated when copying
 4. Generate a new key pair if needed
+5. Verify `DO_USERNAME` matches the key owner
