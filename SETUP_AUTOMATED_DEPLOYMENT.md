@@ -60,7 +60,7 @@ Comprehensive deployment guide covering:
    npm install -g pm2
    
    # Create deployment directory
-   mkdir -p /var/www/myaccounts
+    mkdir -p /var/www/livedealzbackend
    
    # Set up SSH key for GitHub Actions
    # (See DEPLOYMENT.md for detailed instructions)
@@ -153,7 +153,7 @@ Refer to the detailed documentation:
 
 - The workflow uses Node.js 20 (matching your `package.json`)
 - Tests must pass before deployment proceeds
-- The deployment directory is `/var/www/myaccounts`
+- The deployment directory is `/var/www/livedealzbackend`
 - PM2 is used for process management
 - Prisma client is regenerated on each deployment
 - The application is built before deployment

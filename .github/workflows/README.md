@@ -48,11 +48,29 @@ You need to configure the following secrets in your GitHub repository:
   ```
 - **Setup**:
   1. Add the public key (`deploy_key.pub`) to `~/.ssh/authorized_keys` on your Droplet
-  2. Add the private key content as the GitHub secret value
+  2. Copy the **entire** private key including the header and footer:
+     ```
+     -----BEGIN OPENSSH PRIVATE KEY-----
+     b3BlbnNzaC1rZXktdjEAAAAABG5vbmUAAAAEbm9uZQAAAAAAAAABAAABlwAAAAdzc2gtcn
+     NhAAAAAwEAAQAAAYEAn3...
+     -----END OPENSSH PRIVATE KEY-----
+     ```
+  3. Add this entire content as the GitHub secret value
+  
+**Important**: The key must include:
+- `-----BEGIN OPENSSH PRIVATE KEY-----` header
+- The actual key content  
+- `-----END OPENSSH PRIVATE KEY-----` footer
+- Proper line breaks (use `\n` in the secret if needed)
+
+**Troubleshooting**: If you see "ssh: no key found" error:
+- Make sure the key includes the BEGIN/END headers
+- Check for extra spaces or missing line breaks
+- Verify the key format is OpenSSH format (not PEM)
 
 ## Deployment Directory
 
-The workflow deploys to `/var/www/myaccounts` on the Droplet. Make sure:
+The workflow deploys to `/var/www/livedealzbackend` on the Droplet. Make sure:
 - The directory exists
 - The SSH user has write permissions
 - Node.js and npm are installed
@@ -76,7 +94,7 @@ To trigger a manual deployment without pushing code:
 ssh user@your-droplet-ip
 
 # Navigate to the deployment directory
-cd /var/www/myaccounts
+cd /var/www/livedealzbackend
 
 # Pull latest changes
 git pull origin main

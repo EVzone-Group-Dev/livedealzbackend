@@ -52,8 +52,8 @@ Configure these secrets in your GitHub repository:
 
 5. **Create deployment directory**:
    ```bash
-   mkdir -p /var/www/myaccounts
-   chown -R ubuntu:ubuntu /var/www/myaccounts
+    mkdir -p /var/www/livedealzbackend
+    chown -R ubuntu:ubuntu /var/www/livedealzbackend
    ```
 
 6. **Set up SSH access for GitHub Actions**:
@@ -94,7 +94,7 @@ Configure these secrets in your GitHub repository:
 
 1. **Create `.env` file on your Droplet**:
    ```bash
-   cd /var/www/myaccounts
+   cd /var/www/livedealzbackend
    nano .env
    ```
 
@@ -114,7 +114,7 @@ Configure these secrets in your GitHub repository:
 
 1. **Clone your repository** (first time only):
    ```bash
-   cd /var/www/myaccounts
+   cd /var/www/livedealzbackend
    git clone https://github.com/EVzone-Group-Dev/livedealzbackend.git .
    ```
 
@@ -209,7 +209,7 @@ git push origin main
 # SSH into Droplet
 ssh ubuntu@your-droplet-ip
 
-cd /var/www/myaccounts
+cd /var/www/livedealzbackend
 
 # Reset to previous commit
 git log --oneline  # Find previous commit hash
@@ -246,7 +246,7 @@ pm2 logs livedeals-api --lines 100
 lsof -i :3000
 
 # Check .env file exists
-ls -la /var/www/myaccounts/.env
+ls -la /var/www/livedealzbackend/.env
 
 # Verify Prisma can connect
 npx prisma db pull
