@@ -39,7 +39,11 @@ export class CommerceService {
     return product;
   }
 
-  async launchFlashSale(sessionId: string, productId: string, discountPct: number) {
+  async launchFlashSale(
+    sessionId: string,
+    productId: string,
+    discountPct: number,
+  ) {
     const sale = await this.prismaService.flashSale.create({
       data: {
         sessionId,
@@ -63,19 +67,118 @@ export class CommerceService {
     return sale;
   }
 
-  async updateProductGoal(productId: string, goal: { metric?: string, target?: number }) {
-    return await this.prismaService.product.update({
-      where: { id: productId },
-      data: {
-        goalMetric: goal.metric,
-        goalTarget: goal.target,
-      },
+  async getProducts(sessionId: string) {
+    const session = await this.prismaService.session.findUnique({
+      where: { id: sessionId },
+      select: { campaignId: true },
+    });
+
+    return await this.prismaService.product.findMany({
+      where: { campaignId: session?.campaignId || sessionId },
     });
   }
 
-  async getProducts(campaignId: string) {
-    return await this.prismaService.product.findMany({
-      where: { campaignId },
+  async createCoupon(
+    sessionId: string,
+    productId?: string,
+    discountPct: number = 10,
+  ) {
+    const code = Math.random().toString(36).substring(2, 8).toUpperCase();
+    const coupon = await this.prismaService.coupon.create({
+      data: {
+        code,
+        discountPct,
+        sessionId,
+        productId,
+      },
     });
+
+    // Notify buyers via Stage Truth if it's a session-wide coupon
+    if (!productId) {
+      await this.stageService.updateStageTruth(sessionId, {
+        activeCoupon: code,
+      });
+    }
+
+    return coupon;
+  }
+
+  async getCoupons(sessionId: string) {
+    return await this.prismaService.coupon.findMany({
+      where: { sessionId },
+      include: { product: true },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  async getSalesFeed(sessionId: string) {
+    const orders = await this.prismaService.order.findMany({
+      where: { sessionId, status: 'PAID' },
+      include: {
+        user: true,
+        items: { include: { product: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 20,
+    });
+
+    return orders.map((o) => ({
+      id: o.id,
+      buyer: o.user.fullName,
+      handle: o.user.handle,
+      quantity: o.items.reduce((acc, item) => acc + item.quantity, 0),
+      item: o.items[0]?.product.name || 'Multiple Items',
+      amount: o.total,
+      secondsAgo: Math.floor((Date.now() - o.createdAt.getTime()) / 1000),
+    }));
+  }
+
+  async updateProductGoal(
+    sessionId: string,
+    productId: string,
+    metric: string,
+    target: number,
+  ) {
+    const product = await this.prismaService.product.update({
+      where: { id: productId },
+      data: {
+        goalMetric: metric,
+        goalTarget: target,
+      },
+    });
+
+    // Update Stage Truth if this is the active product
+    const truth = await this.stageService.getStageTruth(sessionId);
+    if (truth.activeProductId === productId) {
+      await this.stageService.updateStageTruth(sessionId, {
+        activeProductGoal: { metric, target, current: 0 },
+      });
+    }
+
+    return product;
+  }
+
+  async syncProducts(sessionId: string) {
+    const session = await this.prismaService.session.findUnique({
+      where: { id: sessionId },
+      select: { campaignId: true },
+    });
+
+    if (!session) throw new Error('Session not found');
+
+    const products = await this.prismaService.product.findMany({
+      where: { campaignId: session.campaignId },
+    });
+
+    await this.stageService.updateStageTruth(sessionId, {
+      catalogSyncedAt: new Date().toISOString(),
+      productCount: products.length,
+    });
+
+    return products;
+  }
+
+  async getSuppliers() {
+    return await this.prismaService.supplier.findMany();
   }
 }

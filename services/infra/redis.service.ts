@@ -9,9 +9,19 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
   constructor(private configService: ConfigService) {}
 
   async onModuleInit() {
-    this.client = createClient({
-      url: `redis://${this.configService.get('REDIS_HOST')}:${this.configService.get('REDIS_PORT')}`,
-    });
+    const redisUrl = this.configService.get('REDIS_URL');
+    
+    if (redisUrl) {
+      // Production: Use full URL with SSL support
+      this.client = createClient({
+        url: redisUrl,
+      });
+    } else {
+      // Development: Use separate host/port
+      this.client = createClient({
+        url: `redis://${this.configService.get('REDIS_HOST')}:${this.configService.get('REDIS_PORT')}`,
+      });
+    }
 
     this.client.on('error', (err) => console.error('Redis Client Error', err));
 
@@ -39,7 +49,22 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
     return await this.client.publish(channel, message);
   }
 
+  async subscribe(channel: string, onMessage: (message: string) => void) {
+    const subscriber = this.client.duplicate();
+    await subscriber.connect();
+    await subscriber.subscribe(channel, onMessage);
+
+    return async () => {
+      await subscriber.unsubscribe(channel);
+      await subscriber.quit();
+    };
+  }
+
   async incr(key: string) {
     return await this.client.incr(key);
+  }
+
+  async hDel(key: string, field: string) {
+    return await this.client.hDel(key, field);
   }
 }

@@ -18,19 +18,21 @@ export class KafkaService implements OnModuleInit, OnModuleDestroy {
   async onModuleInit() {
     const admin = this.kafka.admin();
     await admin.connect();
-    
+
     const topics = ['studio.analytics.events', 'studio.commerce.pinned'];
     const existingTopics = await admin.listTopics();
-    
+
     const topicsToCreate = topics
-      .filter(t => !existingTopics.includes(t))
-      .map(t => ({ topic: t, numPartitions: 1 }));
+      .filter((t) => !existingTopics.includes(t))
+      .map((t) => ({ topic: t, numPartitions: 1 }));
 
     if (topicsToCreate.length > 0) {
       await admin.createTopics({ topics: topicsToCreate });
-      console.log(`📦 Kafka: Created topics: ${topicsToCreate.map(t => t.topic).join(', ')}`);
+      console.log(
+        `📦 Kafka: Created topics: ${topicsToCreate.map((t) => t.topic).join(', ')}`,
+      );
     }
-    
+
     await admin.disconnect();
 
     this.producer = this.kafka.producer();
@@ -52,11 +54,15 @@ export class KafkaService implements OnModuleInit, OnModuleDestroy {
     });
   }
 
-  async consume(groupId: string, topic: string, onMessage: (message: any) => Promise<void>) {
+  async consume(
+    groupId: string,
+    topic: string,
+    onMessage: (message: any) => Promise<void>,
+  ) {
     const consumer = this.kafka.consumer({ groupId });
     await consumer.connect();
     await consumer.subscribe({ topic, fromBeginning: false });
-    
+
     await consumer.run({
       eachMessage: async ({ message }) => {
         if (!message.value) return;

@@ -4,7 +4,10 @@ import { CollaborationService } from '../../services/collaboration/collaboration
 import { PrismaService } from '../../services/infra/prisma.service';
 import { RedisService } from '../../services/infra/redis.service';
 
+import { StageModule } from '../stage/stage.module';
+
 @Module({
+  imports: [StageModule],
   controllers: [CollaborationController],
   providers: [CollaborationService, PrismaService, RedisService],
   exports: [CollaborationService],

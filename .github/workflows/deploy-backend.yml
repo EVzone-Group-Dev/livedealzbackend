@@ -1,0 +1,90 @@
+name: Deploy Backend
+
+on:
+  push:
+    branches: [ main ]
+
+# Prevent concurrent deployments
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+# Define permissions for security best practices
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Use Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm install --legacy-peer-deps
+
+      - name: Run tests
+        run: npm run test
+
+  deploy:
+    needs: test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Deploy to DigitalOcean Droplet
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.DO_HOST }}
+          username: ${{ secrets.DO_USERNAME }}
+          key: ${{ secrets.DO_SSH_KEY }}
+          script_stop: true
+          script: |
+            set -euo pipefail
+
+            cd /var/www/livedealzbackend
+
+            # Ensure pm2 exists
+            command -v pm2 >/dev/null 2>&1 || npm i -g pm2
+
+            # Backup server-specific files (important!)
+            [ -f ecosystem.config.js ] && cp ecosystem.config.js /tmp/ecosystem.config.js
+            [ -f .env ] && cp .env /tmp/livedealzbackend.env
+
+            # Determine default branch and sync
+            DEFAULT_BRANCH=$(git remote show origin | grep "HEAD branch" | cut -d' ' -f5)
+            git fetch origin "$DEFAULT_BRANCH"
+            git reset --hard "origin/$DEFAULT_BRANCH"
+            git clean -fd -e ecosystem.config.js -e .env -e .env.*
+
+            # Restore server-specific files
+            [ -f /tmp/ecosystem.config.js ] && mv /tmp/ecosystem.config.js ecosystem.config.js
+            [ -f /tmp/livedealzbackend.env ] && mv /tmp/livedealzbackend.env .env
+
+            # Ignore ecosystem locally so it never blocks pulls
+            grep -qxF "ecosystem.config.js" .git/info/exclude || echo "ecosystem.config.js" >> .git/info/exclude
+
+            # Install deps without rewriting package-lock.json
+            npm ci --legacy-peer-deps
+
+            npx prisma generate
+
+            export NODE_OPTIONS="--max-old-space-size=5096"
+            npm run build
+
+            # Reload using ecosystem config (recommended)
+            if [ -f ecosystem.config.js ]; then
+              pm2 startOrReload ecosystem.config.js --update-env
+            else
+              pm2 restart api || pm2 start dist/main.js --name api --update-env
+            fi

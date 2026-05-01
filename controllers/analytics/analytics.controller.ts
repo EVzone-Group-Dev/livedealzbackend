@@ -48,6 +48,43 @@ export class AnalyticsController {
     @Body('feature') feature: 'ai' | 'cc',
     @Body('enabled') enabled: boolean,
   ) {
-    return await this.analyticsService.toggleLanguageFeature(sessionId, feature, enabled);
+    return await this.analyticsService.toggleLanguageFeature(
+      sessionId,
+      feature,
+      enabled,
+    );
+  }
+
+  @ApiOperation({ summary: 'Get session highlights' })
+  @Get('highlights')
+  async getHighlights(@Param('id') sessionId: string) {
+    return await this.analyticsService.getHighlights(sessionId);
+  }
+
+  @ApiOperation({ summary: 'Get engagement spikes' })
+  @Get('spikes')
+  async getSpikes(@Param('id') sessionId: string) {
+    return await this.analyticsService.getEngagementSpikes(sessionId);
+  }
+
+  @ApiOperation({ summary: 'Export session data (JSON/CSV)' })
+  @Get('export/:format')
+  async export(
+    @Param('id') sessionId: string,
+    @Param('format') format: 'json' | 'csv',
+  ) {
+    return await this.analyticsService.exportData(sessionId, format);
+  }
+
+  @ApiOperation({ summary: 'Get session handoff report' })
+  @Get('handoff')
+  async getHandoff(@Param('id') sessionId: string) {
+    return await this.analyticsService.getSessionHandoff(sessionId);
+  }
+
+  @ApiOperation({ summary: 'Update global language mix for the session' })
+  @Post('language/mix')
+  async updateMix(@Param('id') sessionId: string, @Body('mix') mix: string) {
+    return await this.analyticsService.updateLanguageMix(sessionId, mix);
   }
 }

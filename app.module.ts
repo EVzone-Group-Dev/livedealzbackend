@@ -13,6 +13,11 @@ import { MediaModule } from './modules/media/media.module';
 import { AnalyticsModule } from './modules/analytics/analytics.module';
 import { CollaborationModule } from './modules/collaboration/collaboration.module';
 
+import { BuyerModule } from './modules/buyer/buyer.module';
+import { TeleprompterModule } from './modules/teleprompter/teleprompter.module';
+import { AuthModule } from './modules/auth/auth.module';
+import { DiscoveryModule } from './modules/discovery/discovery.module';
+
 @Module({
   imports: [
     ConfigModule.forRoot({
@@ -27,6 +32,10 @@ import { CollaborationModule } from './modules/collaboration/collaboration.modul
     MediaModule,
     AnalyticsModule,
     CollaborationModule,
+    BuyerModule,
+    TeleprompterModule,
+    AuthModule,
+    DiscoveryModule,
   ],
   controllers: [AppController],
   providers: [AppService],

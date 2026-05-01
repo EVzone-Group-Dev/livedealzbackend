@@ -16,12 +16,30 @@ model User {
   role      UserRole @default(BUYER)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+  preferences Json? // Store { theme: 'dark', currency: 'UGX', language: 'en', notifications: true }
 
   managedSuppliers Supplier[]
   sessions         Session[]
   chatMessages     ChatMessage[]
   pollVotes        PollVote[]
   guestRequests    GuestRequest[]
+  qaQuestions      QAQuestion[]
+
+  // New: Social
+  following        Follow[] @relation("Follower")
+  followers        Follow[] @relation("Following")
+  savedSessions    SavedSession[]
+  watchHistory     WatchHistory[]
+  giveawayWins     GiveawayWinner[]
+  giveawayEntries  GiveawayEntry[]
+  cartItems        CartItem[]
+  sessionReminders SessionReminder[]
+
+  // New: Accounts & Social Rooms
+  addresses        Address[]
+  orders           Order[]
+  hostedRooms      WatchRoom[] @relation("RoomHost")
+  joinedRooms      WatchRoom[] @relation("RoomParticipants")
 }
 
 enum UserRole {
@@ -32,13 +50,14 @@ enum UserRole {
 }
 
 model Supplier {
-  id        String   @id @default(uuid())
-  name      String
-  note      String?
-  ownerId   String
-  owner     User     @relation(fields: [ownerId], references: [id])
-  campaigns Campaign[]
-  createdAt DateTime @default(now())
+  id          String   @id @default(uuid())
+  name        String
+  note        String?
+  ownerId     String
+  owner       User     @relation(fields: [ownerId], references: [id])
+  campaigns   Campaign[]
+  performance SupplierPerformance?
+  createdAt   DateTime @default(now())
 }
 
 model Campaign {
@@ -54,13 +73,14 @@ model Campaign {
 
 model Session {
   id            String   @id @default(uuid())
+  kind          SessionKind @default(LIVE)
   name          String
   note          String?
   campaignId    String
   campaign      Campaign @relation(fields: [campaignId], references: [id])
   hostId        String
   host          User     @relation(fields: [hostId], references: [id])
-  status        SessionStatus @default(STANDBY)
+  status        SessionStatus @default(SCHEDULED)
   scheduledStart DateTime?
   actualStart    DateTime?
   actualEnd      DateTime?
@@ -80,15 +100,86 @@ model Session {
   focusProductId String?
   plan          SessionPlan?
 
+  // New: Media & Scenes
+  scenes        Scene[]
+  activeSceneId String?
+  activeFilters Json?    // Stores { beauty: 'soft-glam', background: 'blur-heavy', etc. }
+  roster        RosterParticipant[]
+  isRecording   Boolean  @default(false)
+  recordingId   String?
+
+  // New: Audience Features
+  giveaways     Giveaway[]
+  qaQuestions   QAQuestion[]
+
+  // New: Adz Branding
+  heroImage     String?
+  teaserVideo   String?
+  customCta     String?
+  themeColor    String?  // Hex code for UI accents
+  category      String?  // e.g. "Fashion", "Tech", "Beauty"
+  streamUrl     String?  // Primary stream or MP4 URL
+
+  savedBy       SavedSession[]
+  watchHistory  WatchHistory[]
+
+  orders        Order[]
+  watchRooms    WatchRoom[]
+  coupons       Coupon[]
+
+  splitScreenLayout Json? // Store { mode: 'Grid', count: 2, heroId: 'abc' }
+  runOfShow         RunOfShowSegment[]
+  multiCamMode      String   @default("inapp") // "inapp", "obs", "vmix"
+  multicamOutput    String?  // e.g. "OBS Studio", "vMix"
+  videoSettings     Json?    // Stores { codec: 'H.264', resolution: '1080p', fps: 60, etc. }
+  languageMix       String   @default("auto") // "auto", "english", "swahili", etc.
+  assets            SessionAsset[]
+  sourceMetadata    SourceMetadata[]
+  reminders         SessionReminder[]
+
+  // Persistent Flags
+  aiEnabled         Boolean  @default(false)
+  ccEnabled         Boolean  @default(false)
+  isMuted           Boolean  @default(true)
+  cameraOn          Boolean  @default(false)
+
   createdAt     DateTime @default(now())
 }
 
+model SessionReminder {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  sessionId String
+  session   Session  @relation(fields: [sessionId], references: [id])
+  createdAt DateTime @default(now())
+
+  @@unique([userId, sessionId])
+}
+
+model RunOfShowSegment {
+  id             String   @id @default(uuid())
+  sessionId      String
+  session        Session  @relation(fields: [sessionId], references: [id])
+  title          String
+  teleprompterNote String?
+  timecode       String?  // e.g. "00:05:00"
+  type           String?  // e.g. "INTRO", "PRODUCT", "QA"
+  status         String   @default("UPCOMING") // UPCOMING, LIVE, DONE
+  order          Int      @default(0)
+  createdAt      DateTime @default(now())
+}
+
 enum SessionStatus {
-  STANDBY
-  READY
-  LIVE
+  SCHEDULED
   REHEARSAL
+  LIVE
   ENDED
+}
+
+enum SessionKind {
+  LIVE
+  AD
 }
 
 model Product {
@@ -109,6 +200,35 @@ model Product {
   kind        String?  @default("product")
 
   createdAt   DateTime @default(now())
+  videoUrl    String?
+  videoDuration String? // e.g. "0:24"
+  stockCount  Int      @default(100)
+  
+  // Shipping & Availability
+  shippingFlag  String?  @default("🌍")
+  shippingCode  String?  @default("GL")
+  shippingEta   String?  @default("3-7 Days")
+  availability  String?  @default("In Stock")
+
+  defaultFlashDiscount Int @default(15)
+  defaultFlashDuration Int @default(5) // minutes
+  orderItems  OrderItem[]
+  coupons     Coupon[]
+  cartItems   CartItem[]
+}
+
+model RosterParticipant {
+  id              String   @id @default(uuid())
+  sessionId       String
+  session         Session  @relation(fields: [sessionId], references: [id])
+  participantId   String
+  handle          String
+  readinessStatus String?  // "ready", "needs_check", "waiting"
+  producerNote    String?
+  role            String   @default("cohost")
+  createdAt       DateTime @default(now())
+
+  @@unique([sessionId, participantId])
 }
 
 enum SellMode {
@@ -177,6 +297,7 @@ model ChatRoom {
 
 model ChatMessage {
   id        String   @id @default(uuid())
+  kind      ChatMessageKind @default(CHAT)
   roomId    String
   room      ChatRoom @relation(fields: [roomId], references: [id])
   userId    String
@@ -186,23 +307,42 @@ model ChatMessage {
   createdAt DateTime @default(now())
 }
 
+enum ChatMessageKind {
+  CHAT
+  JOIN
+  PURCHASE
+  GIVEAWAY_ENTRY
+}
+
 model GuestRequest {
-  id        String   @id @default(uuid())
-  sessionId String
-  session   Session  @relation(fields: [sessionId], references: [id])
-  userId    String
-  user      User     @relation(fields: [userId], references: [id])
-  status    GuestStatus @default(PENDING)
-  note      String?
-  createdAt DateTime @default(now())
+  id                      String   @id @default(uuid())
+  sessionId               String
+  session                 Session  @relation(fields: [sessionId], references: [id])
+  userId                  String
+  user                    User     @relation(fields: [userId], references: [id])
+  type                    GuestRequestType @default(VIDEO)
+  status                  GuestStatus @default(PENDING)
+  note                    String?
+  assignedToRole          String?
+  assignedToParticipantId String?
+  followUpNote            String?
+  createdAt               DateTime @default(now())
+}
+
+enum GuestRequestType {
+  AUDIO
+  VIDEO
 }
 
 enum GuestStatus {
   PENDING
+  INVITED
   BACKSTAGE
   WAITING
   ONSTAGE
   DECLINED
+  CANCELLED
+  ENDED
 }
 
 model AnalyticsEvent {
@@ -232,4 +372,221 @@ model SessionSegment {
   teleprompterNote String?
   order           Int      @default(0)
   createdAt       DateTime @default(now())
+}
+
+model Scene {
+  id        String   @id @default(uuid())
+  sessionId String
+  session   Session  @relation(fields: [sessionId], references: [id])
+  name      String
+  sources   Int      @default(1)
+  config    Json?    // Optional layout/source details
+  createdAt DateTime @default(now())
+}
+
+model SourceMetadata {
+  id        String   @id @default(uuid())
+  sessionId String
+  session   Session  @relation(fields: [sessionId], references: [id])
+  sourceId  String
+  label     String
+  detail    String?
+  tone      String?  // neutral, positive, warning, danger
+  bitrate   Int?     // Kbps
+  fps       Int?
+  createdAt DateTime @default(now())
+
+  @@unique([sessionId, sourceId])
+}
+
+model Giveaway {
+  id          String   @id @default(uuid())
+  title       String
+  prizeName   String
+   prizeImage  String?
+  kind        String   @default("Product") // "Product", "Service"
+  subtitle    String?  // e.g. "Free shipping applied to one order"
+  count       Int      @default(1)
+  sessionId   String
+  session     Session  @relation(fields: [sessionId], references: [id])
+  status      GiveawayStatus @default(UPCOMING)
+  winners     GiveawayWinner[]
+  entries     GiveawayEntry[]
+  createdAt   DateTime @default(now())
+}
+
+model GiveawayEntry {
+  id          String   @id @default(uuid())
+  giveawayId  String
+  giveaway    Giveaway @relation(fields: [giveawayId], references: [id])
+  userId      String
+  user        User     @relation(fields: [userId], references: [id])
+  createdAt   DateTime @default(now())
+
+  @@unique([giveawayId, userId])
+}
+
+model CartItem {
+  id          String   @id @default(uuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id])
+  productId   String
+  product     Product  @relation(fields: [productId], references: [id])
+  sessionId   String?
+  quantity    Int      @default(1)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([userId, productId])
+}
+
+model SessionAsset {
+  id          String   @id @default(uuid())
+  sessionId   String
+  session     Session  @relation(fields: [sessionId], references: [id])
+  name        String
+  url         String
+  type        String   // "image", "video", "background"
+  width       Int?
+  height      Int?
+  sizeBytes   Int?
+  createdAt   DateTime @default(now())
+}
+
+enum GiveawayStatus {
+  UPCOMING
+  OPEN
+  CLOSED
+}
+
+model QAQuestion {
+  id          String   @id @default(uuid())
+  sessionId   String
+  session     Session  @relation(fields: [sessionId], references: [id])
+  userId      String
+  user        User     @relation(fields: [userId], references: [id])
+  content     String
+  isPinned    Boolean  @default(false)
+  isAnswered  Boolean  @default(false)
+  answer      String?
+  createdAt   DateTime @default(now())
+}
+
+model Follow {
+  id          String   @id @default(uuid())
+  followerId  String
+  follower    User     @relation("Follower", fields: [followerId], references: [id])
+  followingId String
+  following   User     @relation("Following", fields: [followingId], references: [id])
+  createdAt   DateTime @default(now())
+
+  @@unique([followerId, followingId])
+}
+
+model SavedSession {
+  id          String   @id @default(uuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id])
+  sessionId   String
+  session     Session  @relation(fields: [sessionId], references: [id])
+  createdAt   DateTime @default(now())
+
+  @@unique([userId, sessionId])
+}
+
+model WatchHistory {
+  id          String   @id @default(uuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id])
+  sessionId   String
+  session     Session  @relation(fields: [sessionId], references: [id])
+  lastWatched DateTime @default(now())
+  
+  @@unique([userId, sessionId])
+}
+
+model GiveawayWinner {
+  id          String   @id @default(uuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id])
+  giveawayId  String
+  giveaway    Giveaway @relation(fields: [giveawayId], references: [id])
+  status      String   @default("Pending Claim") // "Claimed", "Pending Claim"
+  claimNote   String?
+  createdAt   DateTime @default(now())
+
+  @@unique([userId, giveawayId])
+}
+
+model SupplierPerformance {
+  id              String   @id @default(uuid())
+  supplierId      String   @unique
+  supplier        Supplier @relation(fields: [supplierId], references: [id])
+  onTimeDelivery  Float    @default(0.95)
+  responseTime    Int      @default(10) // minutes
+  refundRate      Float    @default(0.02)
+  overallScore    Float    @default(4.8)
+}
+
+model Address {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  label     String   @default("Home")
+  recipient String
+  line1     String
+  line2     String?
+  city      String
+  country   String
+  isDefault Boolean  @default(false)
+  orders    Order[]
+  createdAt DateTime @default(now())
+}
+
+model Order {
+  id          String   @id @default(uuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id])
+  sessionId   String?
+  session     Session? @relation(fields: [sessionId], references: [id])
+  status      String   @default("PENDING") // PENDING, PAID, SHIPPED, DELIVERED
+  total       Float
+  currency    String   @default("USD")
+  addressId   String?
+  address     Address? @relation(fields: [addressId], references: [id])
+  items       OrderItem[]
+  createdAt   DateTime @default(now())
+}
+
+model OrderItem {
+  id        String   @id @default(uuid())
+  orderId   String
+  order     Order    @relation(fields: [orderId], references: [id])
+  productId String
+  product   Product  @relation(fields: [productId], references: [id])
+  quantity  Int
+  price     Float
+}
+
+model WatchRoom {
+  id           String   @id @default(uuid())
+  code         String   @unique
+  sessionId    String
+  session      Session  @relation(fields: [sessionId], references: [id])
+  hostId       String
+  host         User     @relation("RoomHost", fields: [hostId], references: [id])
+  participants User[]   @relation("RoomParticipants")
+  createdAt    DateTime @default(now())
+}
+
+model Coupon {
+  id          String   @id @default(uuid())
+  code        String   @unique
+  discountPct Int      @default(10)
+  sessionId   String
+  session     Session  @relation(fields: [sessionId], references: [id])
+  productId   String?
+  product     Product? @relation(fields: [productId], references: [id])
+  status      String   @default("ACTIVE") // ACTIVE, EXPIRED
+  createdAt   DateTime @default(now())
 }
