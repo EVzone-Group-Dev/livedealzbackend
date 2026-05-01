@@ -26,7 +26,7 @@ Configure these secrets in your GitHub repository:
 |------------|-------------|---------|
 | `DO_HOST` | Droplet IP address or hostname | `123.45.67.89` |
 | `DO_USERNAME` | SSH username | `root` or `ubuntu` |
-| `DO_SSH_KEY` | Private SSH key for authentication | (private key content) |
+| `DO_SSH_KEY` | **PRIVATE** SSH key for authentication (not public key!) | Must include `-----BEGIN OPENSSH PRIVATE KEY-----` header and `-----END OPENSSH PRIVATE KEY-----` footer |
 
 ## Setup Instructions
 
@@ -235,6 +235,35 @@ pm2 reload ecosystem.config.js --update-env
 - Droplet not accessible
 - Insufficient disk space
 - Permission denied errors
+
+**SSH Key Format Error ("ssh: no key found"):**
+
+This error occurs when the SSH key is in the wrong format or is a public key instead of a private key.
+
+**Solution:**
+
+1. Make sure you're using the **PRIVATE** key, not the public key
+   - ❌ Wrong: `ssh-rsa AAAAB3NzaC1yc2E...` (public key)
+   - ✅ Correct: `-----BEGIN OPENSSH PRIVATE KEY-----` (private key)
+
+2. The private key must include:
+   - `-----BEGIN OPENSSH PRIVATE KEY-----` header
+   - The actual key content
+   - `-----END OPENSSH PRIVATE KEY-----` footer
+
+3. To generate a correct key pair:
+   ```bash
+   # On your local machine
+   ssh-keygen -t ed25519 -f deploy_key -C "github-actions-deploy"
+   
+   # Add public key to Droplet
+   cat deploy_key.pub >> ~/.ssh/authorized_keys
+   
+   # Copy private key to GitHub Secrets
+   cat deploy_key  # Copy this entire content
+   ```
+
+4. Add the entire private key content to GitHub Secrets as `DO_SSH_KEY`
 
 ### Application Won't Start
 

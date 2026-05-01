@@ -41,32 +41,46 @@ You need to configure the following secrets in your GitHub repository:
 - **Example**: `root` or `ubuntu`
 
 ### 3. `DO_SSH_KEY`
-- **Description**: Private SSH key for authentication
+- **Description**: **PRIVATE** SSH key for authentication (not the public key!)
 - **How to generate**:
   ```bash
   ssh-keygen -t ed25519 -f deploy_key -C "github-actions-deploy"
   ```
+  This creates two files:
+  - `deploy_key` - **PRIVATE** key (keep this secret!)
+  - `deploy_key.pub` - Public key (add to Droplet)
+
 - **Setup**:
-  1. Add the public key (`deploy_key.pub`) to `~/.ssh/authorized_keys` on your Droplet
-  2. Copy the **entire** private key including the header and footer:
+  1. Add the **PUBLIC** key to Droplet:
+     ```bash
+     cat deploy_key.pub >> ~/.ssh/authorized_keys
+     ```
+  2. Copy the **ENTIRE PRIVATE KEY** including headers:
      ```
      -----BEGIN OPENSSH PRIVATE KEY-----
      b3BlbnNzaC1rZXktdjEAAAAABG5vbmUAAAAEbm9uZQAAAAAAAAABAAABlwAAAAdzc2gtcn
      NhAAAAAwEAAQAAAYEAn3...
      -----END OPENSSH PRIVATE KEY-----
      ```
-  3. Add this entire content as the GitHub secret value
-  
+  3. Add this entire content as the GitHub secret `DO_SSH_KEY`
+
+**CRITICAL**: You must use the **PRIVATE KEY**, not the public key!
+- ❌ WRONG: `ssh-rsa AAAAB3NzaC1yc2E... user@host` (this is a PUBLIC key)
+- ✅ CORRECT: `-----BEGIN OPENSSH PRIVATE KEY-----` (this is a PRIVATE key)
+
 **Important**: The key must include:
 - `-----BEGIN OPENSSH PRIVATE KEY-----` header
 - The actual key content  
 - `-----END OPENSSH PRIVATE KEY-----` footer
-- Proper line breaks (use `\n` in the secret if needed)
+- Proper line breaks
 
 **Troubleshooting**: If you see "ssh: no key found" error:
+- Make sure you're using the **PRIVATE** key (not public key)
 - Make sure the key includes the BEGIN/END headers
 - Check for extra spaces or missing line breaks
 - Verify the key format is OpenSSH format (not PEM)
+- The key should start with `-----BEGIN OPENSSH PRIVATE KEY-----`
+- It should NOT start with `ssh-rsa` or `ssh-ed25519`
 
 ## Deployment Directory
 
