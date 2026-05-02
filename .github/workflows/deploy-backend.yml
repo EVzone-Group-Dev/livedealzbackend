@@ -80,6 +80,18 @@ jobs:
               echo "Git repository found, pulling latest changes..."
             fi
             
+            # Ensure Node.js 20+ is installed
+            echo "Checking Node.js version..."
+            NODE_MAJOR=$(node --version 2>/dev/null | sed 's/v//' | cut -d. -f1)
+            if [ "$NODE_MAJOR" -lt 20 ] 2>/dev/null; then
+              echo "Node.js version is $(node --version), upgrading to Node.js 20..."
+              curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
+              apt-get install -y nodejs
+              echo "Node.js upgraded to $(node --version)"
+            else
+              echo "Node.js version is $(node --version) - OK"
+            fi
+            
             # Ensure pm2 exists
             echo "Checking PM2 installation..."
             if command -v pm2 >/dev/null 2>&1; then
