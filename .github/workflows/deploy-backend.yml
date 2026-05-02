@@ -53,7 +53,9 @@ jobs:
             set -euo pipefail
             
             # Enable better error logging
+            echo "========================================"
             echo "=== Deployment Started at $(date) ==="
+            echo "========================================"
             echo "Current directory: $(pwd)"
             echo "Current user: $(whoami)"
             echo "Hostname: $(hostname)"
@@ -61,102 +63,145 @@ jobs:
             
             # Check if directory exists, create if not
             if [ ! -d "/var/www/livedealzbackend" ]; then
-              echo "Directory /var/www/livedealzbackend does not exist, creating..."
+              echo "[INFO] Directory /var/www/livedealzbackend does not exist, creating..."
               mkdir -p /var/www/livedealzbackend
               chown -R root:root /var/www/livedealzbackend
               chmod 755 /var/www/livedealzbackend
-              echo "Directory created successfully"
+              echo "[INFO] Directory created successfully"
             fi
             
             cd /var/www/livedealzbackend
-            echo "Changed to directory: $(pwd)"
+            echo "[INFO] Changed to directory: $(pwd)"
             
             # Check if git repo exists, clone if not (using HTTPS for public repo)
             if [ ! -d ".git" ]; then
-              echo "No git repository found, cloning via HTTPS..."
+              echo "[INFO] No git repository found, cloning via HTTPS..."
               git clone https://github.com/EVzone-Group-Dev/livedealzbackend.git .
-              echo "Repository cloned successfully"
+              echo "[INFO] Repository cloned successfully"
             else
-              echo "Git repository found, pulling latest changes..."
+              echo "[INFO] Git repository found, will pull latest changes..."
             fi
             
             # Ensure Node.js 20+ is installed
-            echo "Checking Node.js version..."
+            echo "[INFO] Checking Node.js version..."
+            CURRENT_NODE=$(node --version 2>/dev/null || echo "none")
+            echo "[INFO] Current Node.js version: $CURRENT_NODE"
+            
             NODE_MAJOR=$(node --version 2>/dev/null | sed 's/v//' | cut -d. -f1)
-            if [ "$NODE_MAJOR" -lt 20 ] 2>/dev/null; then
-              echo "Node.js version is $(node --version), upgrading to Node.js 20..."
-              curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
+            if [ -z "$NODE_MAJOR" ] || [ "$NODE_MAJOR" -lt 20 ] 2>/dev/null; then
+              echo "[INFO] Node.js version is $CURRENT_NODE, upgrading to Node.js 20..."
+              
+              # Install NodeSource repository
+              curl -fsSL https://deb.nodesource.com/setup_20.x -o /tmp/nodesource_setup.sh
+              bash /tmp/nodesource_setup.sh
+              
+              # Install/upgrade Node.js
               apt-get install -y nodejs
-              echo "Node.js upgraded to $(node --version)"
+              
+              # Clean up
+              rm -f /tmp/nodesource_setup.sh
+              
+              NEW_NODE=$(node --version)
+              echo "[INFO] Node.js upgraded to $NEW_NODE"
             else
-              echo "Node.js version is $(node --version) - OK"
+              echo "[INFO] Node.js version is $CURRENT_NODE - OK"
             fi
             
+            # Ensure npm is up to date
+            echo "[INFO] Checking npm version..."
+            npm install -g npm@latest
+            echo "[INFO] npm version: $(npm --version)"
+            
             # Ensure pm2 exists
-            echo "Checking PM2 installation..."
+            echo "[INFO] Checking PM2 installation..."
             if command -v pm2 >/dev/null 2>&1; then
-              echo "PM2 is installed: $(pm2 --version)"
+              echo "[INFO] PM2 is installed: $(pm2 --version)"
             else
-              echo "PM2 not found, installing..."
-              npm i -g pm2
+              echo "[INFO] PM2 not found, installing..."
+              npm install -g pm2
+              echo "[INFO] PM2 installed: $(pm2 --version)"
             fi
             
             # Backup server-specific files (important!)
-            echo "Backing up server-specific files..."
-            [ -f ecosystem.config.js ] && { cp ecosystem.config.js /tmp/ecosystem.config.js && echo "Backed up ecosystem.config.js"; } || echo "No ecosystem.config.js to backup"
-            [ -f .env ] && { cp .env /tmp/livedealzbackend.env && echo "Backed up .env"; } || echo "No .env to backup"
+            echo "[INFO] Backing up server-specific files..."
+            if [ -f ecosystem.config.js ]; then
+              cp ecosystem.config.js /tmp/ecosystem.config.js
+              echo "[INFO] Backed up ecosystem.config.js"
+            else
+              echo "[INFO] No ecosystem.config.js to backup"
+            fi
+            
+            if [ -f .env ]; then
+              cp .env /tmp/livedealzbackend.env
+              echo "[INFO] Backed up .env"
+            else
+              echo "[INFO] No .env to backup"
+            fi
             
             # Determine default branch and sync
-            echo "Fetching latest code..."
+            echo "[INFO] Fetching latest code..."
             DEFAULT_BRANCH=$(git remote show origin | grep "HEAD branch" | cut -d' ' -f5)
-            echo "Default branch: $DEFAULT_BRANCH"
+            echo "[INFO] Default branch: $DEFAULT_BRANCH"
             git fetch origin "$DEFAULT_BRANCH"
             git reset --hard "origin/$DEFAULT_BRANCH"
             git clean -fd -e ecosystem.config.js -e .env -e .env.*
-            echo "Code synced successfully"
+            echo "[INFO] Code synced successfully"
             
             # Restore server-specific files
-            echo "Restoring server-specific files..."
-            [ -f /tmp/ecosystem.config.js ] && { mv /tmp/ecosystem.config.js ecosystem.config.js && echo "Restored ecosystem.config.js"; } || echo "No ecosystem.config.js to restore"
-            [ -f /tmp/livedealzbackend.env ] && { mv /tmp/livedealzbackend.env .env && echo "Restored .env"; } || echo "No .env to restore"
+            echo "[INFO] Restoring server-specific files..."
+            if [ -f /tmp/ecosystem.config.js ]; then
+              mv /tmp/ecosystem.config.js ecosystem.config.js
+              echo "[INFO] Restored ecosystem.config.js"
+            else
+              echo "[INFO] No ecosystem.config.js to restore"
+            fi
+            
+            if [ -f /tmp/livedealzbackend.env ]; then
+              mv /tmp/livedealzbackend.env .env
+              echo "[INFO] Restored .env"
+            else
+              echo "[INFO] No .env to restore"
+            fi
             
             # Ignore ecosystem locally so it never blocks pulls
             if ! grep -qxF "ecosystem.config.js" .git/info/exclude 2>/dev/null; then
               echo "ecosystem.config.js" >> .git/info/exclude
-              echo "Added ecosystem.config.js to .git/info/exclude"
+              echo "[INFO] Added ecosystem.config.js to .git/info/exclude"
             else
-              echo "ecosystem.config.js already in .git/info/exclude"
+              echo "[INFO] ecosystem.config.js already in .git/info/exclude"
             fi
             
             # Install deps without rewriting package-lock.json
-            echo "Installing dependencies..."
+            echo "[INFO] Installing dependencies..."
             npm ci --legacy-peer-deps
-            echo "Dependencies installed"
+            echo "[INFO] Dependencies installed successfully"
             
             # Generate Prisma client
-            echo "Generating Prisma client..."
+            echo "[INFO] Generating Prisma client..."
             npx prisma generate
-            echo "Prisma client generated"
+            echo "[INFO] Prisma client generated"
             
             # Build application
-            echo "Building application..."
+            echo "[INFO] Building application..."
             export NODE_OPTIONS="--max-old-space-size=5096"
             npm run build
-            echo "Build completed"
+            echo "[INFO] Build completed successfully"
             
             # Reload using ecosystem config (recommended)
-            echo "Starting/reloading application with PM2..."
+            echo "[INFO] Starting/reloading application with PM2..."
             if [ -f ecosystem.config.js ]; then
-              echo "Using ecosystem.config.js"
+              echo "[INFO] Using ecosystem.config.js"
               pm2 startOrReload ecosystem.config.js --update-env
             else
-              echo "No ecosystem.config.js found, using direct command"
+              echo "[INFO] No ecosystem.config.js found, using direct command"
               pm2 restart api || pm2 start dist/main.js --name api --update-env
             fi
             
             # Check PM2 status
-            echo "PM2 Status:"
+            echo "[INFO] PM2 Status:"
             pm2 status
             
             echo ""
+            echo "========================================"
             echo "=== Deployment Completed Successfully at $(date) ==="
+            echo "========================================"
