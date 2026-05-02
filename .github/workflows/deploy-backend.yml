@@ -71,13 +71,19 @@ jobs:
             cd /var/www/livedealzbackend
             echo "Changed to directory: $(pwd)"
             
-            # Check if git repo exists, clone if not (using SSH)
+            # Check if git repo exists, clone if not (using SSH with disabled host key check)
             if [ ! -d ".git" ]; then
               echo "No git repository found, cloning via SSH..."
-              git clone git@github.com:EVzone-Group-Dev/livedealzbackend.git .
+              # Disable strict host key checking for github.com
+              mkdir -p ~/.ssh
+              ssh-keyscan github.com >> ~/.ssh/known_hosts 2>/dev/null || true
+              GIT_SSH_COMMAND="ssh -o StrictHostKeyChecking=no" git clone git@github.com:EVzone-Group-Dev/livedealzbackend.git .
               echo "Repository cloned successfully"
             else
               echo "Git repository found, pulling latest changes..."
+              # Disable strict host key checking for pulls too
+              mkdir -p ~/.ssh
+              ssh-keyscan github.com >> ~/.ssh/known_hosts 2>/dev/null || true
             fi
             
             # Ensure pm2 exists
@@ -98,7 +104,7 @@ jobs:
             echo "Fetching latest code..."
             DEFAULT_BRANCH=$(git remote show origin | grep "HEAD branch" | cut -d' ' -f5)
             echo "Default branch: $DEFAULT_BRANCH"
-            git fetch origin "$DEFAULT_BRANCH"
+            GIT_SSH_COMMAND="ssh -o StrictHostKeyChecking=no" git fetch origin "$DEFAULT_BRANCH"
             git reset --hard "origin/$DEFAULT_BRANCH"
             git clean -fd -e ecosystem.config.js -e .env -e .env.*
             echo "Code synced successfully"
