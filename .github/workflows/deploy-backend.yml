@@ -178,7 +178,6 @@ jobs:
             echo "[INFO] Generating Prisma client..."
             npx prisma generate || {
               echo "[WARN] Prisma generate failed, checking schema compatibility..."
-              # Prisma 6 uses different format, try with legacy
               npx prisma@6 generate || true
             }
             echo "[INFO] Prisma client generated"
@@ -207,6 +206,35 @@ jobs:
             else
               echo "[ERROR] Build output not found!"
               exit 1
+            fi
+            
+            # Configure Nginx as reverse proxy
+            echo "[INFO] Configuring Nginx reverse proxy..."
+            if [ -f nginx.conf ]; then
+              # Install nginx if not present
+              if ! command -v nginx >/dev/null 2>&1; then
+                echo "[INFO] Installing Nginx..."
+                apt-get install -y nginx
+              fi
+              
+              # Copy nginx config
+              cp nginx.conf /etc/nginx/sites-available/livedealzbackend
+              
+              # Remove default site
+              rm -f /etc/nginx/sites-enabled/default
+              
+              # Enable our site
+              ln -sf /etc/nginx/sites-available/livedealzbackend /etc/nginx/sites-enabled/livedealzbackend
+              
+              # Test and reload nginx
+              if nginx -t 2>/dev/null; then
+                systemctl reload nginx || systemctl restart nginx
+                echo "[INFO] Nginx configured and reloaded"
+              else
+                echo "[WARN] Nginx config test failed, skipping nginx setup"
+              fi
+            else
+              echo "[INFO] No nginx.conf found, skipping nginx setup"
             fi
             
             # Reload using ecosystem config (recommended)

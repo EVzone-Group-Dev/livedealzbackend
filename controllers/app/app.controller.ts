@@ -20,4 +20,16 @@ export class AppController {
       environment: process.env.NODE_ENV || 'development',
     };
   }
+
+  // Root-level health check for load balancer
+  @Get('/health')
+  @Head('/health')
+  rootHealthCheck(): object {
+    return {
+      status: 'ok',
+      timestamp: new Date().toISOString(),
+      uptime: process.uptime(),
+      environment: process.env.NODE_ENV || 'development',
+    };
+  }
 }
