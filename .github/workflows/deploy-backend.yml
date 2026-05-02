@@ -71,10 +71,10 @@ jobs:
             cd /var/www/livedealzbackend
             echo "Changed to directory: $(pwd)"
             
-            # Check if git repo exists, clone if not
+            # Check if git repo exists, clone if not (using SSH)
             if [ ! -d ".git" ]; then
-              echo "No git repository found, cloning..."
-              git clone https://github.com/EVzone-Group-Dev/livedealzbackend.git .
+              echo "No git repository found, cloning via SSH..."
+              git clone git@github.com:EVzone-Group-Dev/livedealzbackend.git .
               echo "Repository cloned successfully"
             else
               echo "Git repository found, pulling latest changes..."
