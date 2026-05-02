@@ -48,11 +48,8 @@ jobs:
           host: ${{ secrets.DO_HOST }}
           username: ${{ secrets.DO_USERNAME }}
           key: ${{ secrets.DO_SSH_KEY }}
-          script_stop: true
+          script_stop: false
           script: |
-            set -euo pipefail
-            
-            # Enable better error logging
             echo "========================================"
             echo "=== Deployment Started at $(date) ==="
             echo "========================================"
@@ -79,7 +76,10 @@ jobs:
               git clone https://github.com/EVzone-Group-Dev/livedealzbackend.git .
               echo "[INFO] Repository cloned successfully"
             else
-              echo "[INFO] Git repository found, will pull latest changes..."
+              echo "[INFO] Git repository found, pulling latest changes..."
+              git fetch origin main
+              git reset --hard origin/main
+              git clean -fd -e ecosystem.config.js -e .env -e .env.* || true
             fi
             
             # Ensure Node.js 20+ is installed
@@ -91,15 +91,19 @@ jobs:
             if [ -z "$NODE_MAJOR" ] || [ "$NODE_MAJOR" -lt 20 ] 2>/dev/null; then
               echo "[INFO] Node.js version is $CURRENT_NODE, upgrading to Node.js 20..."
               
+              # Update apt and install prerequisites
+              export DEBIAN_FRONTEND=noninteractive
+              apt-get update -y
+              apt-get install -y ca-certificates curl gnupg
+              
               # Install NodeSource repository
-              curl -fsSL https://deb.nodesource.com/setup_20.x -o /tmp/nodesource_setup.sh
-              bash /tmp/nodesource_setup.sh
+              mkdir -p /etc/apt/keyrings
+              curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key | gpg --dearmor -o /etc/apt/keyrings/nodesource.gpg
+              echo "deb [signed-by=/etc/apt/keyrings/nodesource.gpg] https://deb.nodesource.com/node_20.x nodistro main" | tee /etc/apt/sources.list.d/nodesource.list
               
               # Install/upgrade Node.js
+              apt-get update -y
               apt-get install -y nodejs
-              
-              # Clean up
-              rm -f /tmp/nodesource_setup.sh
               
               NEW_NODE=$(node --version)
               echo "[INFO] Node.js upgraded to $NEW_NODE"
@@ -109,7 +113,7 @@ jobs:
             
             # Ensure npm is up to date
             echo "[INFO] Checking npm version..."
-            npm install -g npm@latest
+            npm install -g npm@latest || true
             echo "[INFO] npm version: $(npm --version)"
             
             # Ensure pm2 exists
@@ -138,31 +142,6 @@ jobs:
               echo "[INFO] No .env to backup"
             fi
             
-            # Determine default branch and sync
-            echo "[INFO] Fetching latest code..."
-            DEFAULT_BRANCH=$(git remote show origin | grep "HEAD branch" | cut -d' ' -f5)
-            echo "[INFO] Default branch: $DEFAULT_BRANCH"
-            git fetch origin "$DEFAULT_BRANCH"
-            git reset --hard "origin/$DEFAULT_BRANCH"
-            git clean -fd -e ecosystem.config.js -e .env -e .env.*
-            echo "[INFO] Code synced successfully"
-            
-            # Restore server-specific files
-            echo "[INFO] Restoring server-specific files..."
-            if [ -f /tmp/ecosystem.config.js ]; then
-              mv /tmp/ecosystem.config.js ecosystem.config.js
-              echo "[INFO] Restored ecosystem.config.js"
-            else
-              echo "[INFO] No ecosystem.config.js to restore"
-            fi
-            
-            if [ -f /tmp/livedealzbackend.env ]; then
-              mv /tmp/livedealzbackend.env .env
-              echo "[INFO] Restored .env"
-            else
-              echo "[INFO] No .env to restore"
-            fi
-            
             # Ignore ecosystem locally so it never blocks pulls
             if ! grep -qxF "ecosystem.config.js" .git/info/exclude 2>/dev/null; then
               echo "ecosystem.config.js" >> .git/info/exclude
@@ -186,6 +165,15 @@ jobs:
             export NODE_OPTIONS="--max-old-space-size=5096"
             npm run build
             echo "[INFO] Build completed successfully"
+            
+            # Verify build output
+            if [ -d "dist" ]; then
+              echo "[INFO] Build output verified: dist/ directory exists"
+              ls -la dist/
+            else
+              echo "[ERROR] Build output not found!"
+              exit 1
+            fi
             
             # Reload using ecosystem config (recommended)
             echo "[INFO] Starting/reloading application with PM2..."
