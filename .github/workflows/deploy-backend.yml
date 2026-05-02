@@ -160,9 +160,9 @@ jobs:
             npx prisma generate
             echo "[INFO] Prisma client generated"
             
-            # Build application
+            # Build application with increased memory
             echo "[INFO] Building application..."
-            export NODE_OPTIONS="--max-old-space-size=5096"
+            export NODE_OPTIONS="--max-old-space-size=4096"
             npm run build
             echo "[INFO] Build completed successfully"
             
