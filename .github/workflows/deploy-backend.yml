@@ -51,40 +51,92 @@ jobs:
           script_stop: true
           script: |
             set -euo pipefail
-
+            
+            # Enable better error logging
+            echo "=== Deployment Started at $(date) ==="
+            echo "Current directory: $(pwd)"
+            echo "Current user: $(whoami)"
+            echo "Hostname: $(hostname)"
+            echo ""
+            
+            # Check if directory exists, create if not
+            if [ ! -d "/var/www/livedealzbackend" ]; then
+              echo "ERROR: /var/www/livedealzbackend does not exist!"
+              echo "Creating directory..."
+              mkdir -p /var/www/livedealzbackend
+              chown -R root:root /var/www/livedealzbackend
+              chmod 755 /var/www/livedealzbackend
+              echo "Directory created successfully"
+            fi
+            
             cd /var/www/livedealzbackend
-
+            echo "Changed to directory: $(pwd)"
+            
             # Ensure pm2 exists
-            command -v pm2 >/dev/null 2>&1 || npm i -g pm2
-
+            echo "Checking PM2 installation..."
+            if command -v pm2 >/dev/null 2>&1; then
+              echo "PM2 is installed: $(pm2 --version)"
+            else
+              echo "PM2 not found, installing..."
+              npm i -g pm2
+            fi
+            
             # Backup server-specific files (important!)
-            [ -f ecosystem.config.js ] && cp ecosystem.config.js /tmp/ecosystem.config.js
-            [ -f .env ] && cp .env /tmp/livedealzbackend.env
-
+            echo "Backing up server-specific files..."
+            [ -f ecosystem.config.js ] && { cp ecosystem.config.js /tmp/ecosystem.config.js && echo "Backed up ecosystem.config.js"; } || echo "No ecosystem.config.js to backup"
+            [ -f .env ] && { cp .env /tmp/livedealzbackend.env && echo "Backed up .env"; } || echo "No .env to backup"
+            
             # Determine default branch and sync
+            echo "Fetching latest code..."
             DEFAULT_BRANCH=$(git remote show origin | grep "HEAD branch" | cut -d' ' -f5)
+            echo "Default branch: $DEFAULT_BRANCH"
             git fetch origin "$DEFAULT_BRANCH"
             git reset --hard "origin/$DEFAULT_BRANCH"
             git clean -fd -e ecosystem.config.js -e .env -e .env.*
-
+            echo "Code synced successfully"
+            
             # Restore server-specific files
-            [ -f /tmp/ecosystem.config.js ] && mv /tmp/ecosystem.config.js ecosystem.config.js
-            [ -f /tmp/livedealzbackend.env ] && mv /tmp/livedealzbackend.env .env
-
+            echo "Restoring server-specific files..."
+            [ -f /tmp/ecosystem.config.js ] && { mv /tmp/ecosystem.config.js ecosystem.config.js && echo "Restored ecosystem.config.js"; } || echo "No ecosystem.config.js to restore"
+            [ -f /tmp/livedealzbackend.env ] && { mv /tmp/livedealzbackend.env .env && echo "Restored .env"; } || echo "No .env to restore"
+            
             # Ignore ecosystem locally so it never blocks pulls
-            grep -qxF "ecosystem.config.js" .git/info/exclude || echo "ecosystem.config.js" >> .git/info/exclude
-
+            if ! grep -qxF "ecosystem.config.js" .git/info/exclude 2>/dev/null; then
+              echo "ecosystem.config.js" >> .git/info/exclude
+              echo "Added ecosystem.config.js to .git/info/exclude"
+            else
+              echo "ecosystem.config.js already in .git/info/exclude"
+            fi
+            
             # Install deps without rewriting package-lock.json
+            echo "Installing dependencies..."
             npm ci --legacy-peer-deps
-
+            echo "Dependencies installed"
+            
+            # Generate Prisma client
+            echo "Generating Prisma client..."
             npx prisma generate
-
+            echo "Prisma client generated"
+            
+            # Build application
+            echo "Building application..."
             export NODE_OPTIONS="--max-old-space-size=5096"
             npm run build
-
+            echo "Build completed"
+            
             # Reload using ecosystem config (recommended)
+            echo "Starting/reloading application with PM2..."
             if [ -f ecosystem.config.js ]; then
+              echo "Using ecosystem.config.js"
               pm2 startOrReload ecosystem.config.js --update-env
             else
+              echo "No ecosystem.config.js found, using direct command"
               pm2 restart api || pm2 start dist/main.js --name api --update-env
             fi
+            
+            # Check PM2 status
+            echo "PM2 Status:"
+            pm2 status
+            
+            echo ""
+            echo "=== Deployment Completed Successfully at $(date) ==="
