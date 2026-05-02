@@ -61,8 +61,7 @@ jobs:
             
             # Check if directory exists, create if not
             if [ ! -d "/var/www/livedealzbackend" ]; then
-              echo "ERROR: /var/www/livedealzbackend does not exist!"
-              echo "Creating directory..."
+              echo "Directory /var/www/livedealzbackend does not exist, creating..."
               mkdir -p /var/www/livedealzbackend
               chown -R root:root /var/www/livedealzbackend
               chmod 755 /var/www/livedealzbackend
@@ -71,6 +70,15 @@ jobs:
             
             cd /var/www/livedealzbackend
             echo "Changed to directory: $(pwd)"
+            
+            # Check if git repo exists, clone if not
+            if [ ! -d ".git" ]; then
+              echo "No git repository found, cloning..."
+              git clone https://github.com/EVzone-Group-Dev/livedealzbackend.git .
+              echo "Repository cloned successfully"
+            else
+              echo "Git repository found, pulling latest changes..."
+            fi
             
             # Ensure pm2 exists
             echo "Checking PM2 installation..."
